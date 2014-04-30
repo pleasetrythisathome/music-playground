@@ -23,7 +23,7 @@
   [server handlers]
   (doall (map (fn [[action path]] (osc-rm-handler server path)) handlers)))
 
-(defn track-devices
+(defn monitor-devices
   []
   (let [connection (chan)
         handlers [[:add "/serialosc/device"]

@@ -1,18 +1,15 @@
 (ns playground.core
-  (:use [clojure.core.async :refer [go put! <! >! chan timeout]]
-        [playground.serialosc :refer [track-devices]]))
+  (:require [clojure.core.async :refer [go put! <! >! chan timeout]]
+            [clojure.pprint :refer [pprint]]
+            [playground.serialosc :refer [monitor-devices]]))
 
 ;(osc-debug true)
 
-(def available-devices (track-devices))
+(def available-devices (monitor-devices))
 (go
  (while true
    (let [devices (<! available-devices)]
-     (println :devices (first (vals devices))))))
-
-
-
-
+     (pprint :devices (first (vals devices))))))
 
 ;; (def mPath "/dev/tty.usbserial-m0000962")
 
@@ -31,9 +28,6 @@
 ;; ;; (poly/toggle-all monome)
 
 ;; (led/led-on monome 0 0)
-
-
-
 
 ;; (monome/connected? monome)
 
