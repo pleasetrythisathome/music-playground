@@ -75,9 +75,6 @@
 
 ;; grid actions
 
-;; (defn toggle-all
-;;   [state]
-;;   (osc-send client "/grid/led/all" state))
 ;;leds
 
 (defn row->bitmask
@@ -107,3 +104,18 @@
   [monome x y-off state]
   (send-to monome "/grid/led/col" x y-off (row->bitmask state)))
 
+;; animations
+
+(defn connect-animation
+  [monome]
+  (let [row-on (apply vector (repeat 10 1))
+        row-off (apply vector (repeat 10 0))]
+    (go
+     (loop [col 0]
+       (set-column monome col 0 row-on)
+       (<! (timeout 25))
+       (set-column monome col 0 row-off)
+       (when (< col 18)
+         (recur (inc col)))))))
+
+;; add brightness operations
