@@ -119,3 +119,15 @@
          (recur (inc col)))))))
 
 ;; add brightness operations
+
+;; buttons
+
+(defn monome-listen
+  [monome]
+  (let [out (chan)
+        prefix (:prefix monome)
+        handlers [[:button (str prefix "/grid/key")]
+                  [:tilt (str prefix "/tilt")]]]
+    (bind-handlers out handlers)
+    out))
+
