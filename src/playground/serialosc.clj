@@ -131,3 +131,46 @@
     (bind-handlers out handlers)
     out))
 
+;; tests
+
+;; (monitor-devices)
+;; (def monome (first (vals (get-devices))))
+
+;; (set-all monome 1)
+;; (set-all monome 0)
+
+
+;; (set-led monome 0 0 1)
+;; (set-led monome 0 0 0)
+
+;; (def row-on (apply vector (repeat 10 1)))
+;; (def row-off (apply vector (repeat 10 0)))
+;; (set-row monome 0 0 row-on)
+;; (set-row monome 0 0 row-off)
+
+;; (set-column monome 0 0 row-on)
+;; (set-column monome 0 0 row-off)
+
+;; (connect-animation monome)
+
+#_(defn handle-event
+  [[action args]]
+  (case action
+    :button (pprint args)
+    :tilt nil))
+
+#_(let [events (monome-listen monome)]
+    (go
+     (while true
+       (let [event (<! events)]
+         (handle-event event)))))
+
+;; monitor devices
+
+#_(let [available-devices (monitor-devices)]
+  (go
+   (while true
+     (let [devices (<! available-devices)
+           monome (first (vals devices))]
+
+       (toggle-all monome 0)))))
