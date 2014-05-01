@@ -1,26 +1,31 @@
 (ns playground.serialosc
-  (:use [overtone.osc]
-        [clojure.core.async :refer [go put! <! >! chan timeout]]))
+  (:require [clojure.pprint :refer [pprint]]
+            [clojure.core.async :refer [go put! <! >! chan timeout]])
+  (:use [overtone.osc]))
 
-(defonce PORTS {:serialosc 12002
-                :server 4242})
-(defonce host "127.0.0.1")
+;(osc-debug true)
 
-(defonce server (osc-server (:server PORTS)))
-(defonce client (osc-client "localhost" (:serialosc PORTS)))
+(def PORTS {:serialosc 12002
+            :server 12001})
+(def host "localhost")
 
-(defonce devices (atom {}))
+(def server (osc-server (:server PORTS)))
+(def to-serialosc (osc-client host (:serialosc PORTS)))
+
+;(osc-close server)
+
+(def devices (atom {}))
 
 (defn listen-disconnect
   []
-  (osc-send client "/serialosc/notify" host (:server PORTS)))
+  (osc-send to-serialosc "/serialosc/notify" host (:server PORTS)))
 
 (defn bind-handlers
-  [server chan handlers]
+  [chan handlers]
   (doall (map (fn [[action path]] (osc-handle server path #(put! chan [action (:args %)]))) handlers)))
 
 (defn rm-handlers
-  [server handlers]
+  [handlers]
   (doall (map (fn [[action path]] (osc-rm-handler server path)) handlers)))
 
 (defn monitor-devices
@@ -35,27 +40,40 @@
     (add-watch devices :change (fn [key ref old new] (when-not (= old new)
                                                       (put! out new))))
 
-    (rm-handlers server handlers)
-    (bind-handlers server connection handlers)
+    (rm-handlers handlers)
+    (bind-handlers connection handlers)
 
-    (osc-send client "/serialosc/list" host (:server PORTS))
+    (osc-send to-serialosc "/serialosc/list" host (:server PORTS))
 
     (go
      (while true
        (let [[action [id type port]] (<! connection)
              device {:id (keyword id)
                      :type type
-                     :port port}]
+                     :port port
+                     :prefix (str "/" id)
+                     :client (osc-client host port)}]
          (case action
            :add (swap! devices #(assoc % (:id device) device))
            :remove (swap! devices #(dissoc % (:id device))))
          (listen-disconnect))))
     out))
 
-;; (defn connect
-;;   [device]
-;;   (print :connect device)
-;;   (osc-send client "/serialosc/list" host (:port device)))
+(defn get-devices
+  []
+  @devices)
+
+(defn connect
+  [{:keys [client prefix] :as device}]
+  (osc-send client "/sys/port" (:server PORTS))
+  (osc-send client "/sys/prefix" prefix))
+
+(defn send-to [{:keys [client] :as device} path & args]
+  (connect device)
+  (apply (partial osc-send client (str (:prefix device) path)) args))
+
+
+;; grid actions
 
 ;; (defn toggle-all
 ;;   [state]
