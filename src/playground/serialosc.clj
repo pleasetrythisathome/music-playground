@@ -5,16 +5,17 @@
 
 ;(osc-debug true)
 
-(def PORTS {:serialosc 12002
+(defonce PORTS {:serialosc 12002
             :server 12001})
-(def host "localhost")
+(defonce host "localhost")
 
-(def server (osc-server (:server PORTS)))
-(def to-serialosc (osc-client host (:serialosc PORTS)))
+(defonce server (osc-server (:server PORTS)))
+(defonce to-serialosc (osc-client host (:serialosc PORTS)))
 
 ;(osc-close server)
 
-(def devices (atom {}))
+(defonce devices (atom {}))
+(defonce clients (atom {}))
 
 (defn listen-disconnect
   []
@@ -28,50 +29,22 @@
   [handlers]
   (doall (map (fn [[action path]] (osc-rm-handler server path)) handlers)))
 
-(defn monitor-devices
-  []
-  (let [connection (chan)
-        handlers [[:add "/serialosc/device"]
-                  [:add "/serialosc/add"]
-                  [:remove "/serialosc/remove"]]
-        out (chan)]
-    (reset! devices {})
-
-    (add-watch devices :change (fn [key ref old new] (when-not (= old new)
-                                                      (put! out new))))
-
-    (rm-handlers handlers)
-    (bind-handlers connection handlers)
-
-    (osc-send to-serialosc "/serialosc/list" host (:server PORTS))
-
-    (go
-     (while true
-       (let [[action [id type port]] (<! connection)
-             device {:id (keyword id)
-                     :type type
-                     :port port
-                     :prefix (str "/" id)
-                     :client (osc-client host port)}]
-         (case action
-           :add (swap! devices #(assoc % (:id device) device))
-           :remove (swap! devices #(dissoc % (:id device))))
-         (listen-disconnect))))
-    out))
-
 (defn get-devices
   []
   @devices)
 
-(defn connect
-  [{:keys [client prefix] :as device}]
-  (osc-send client "/sys/port" (:server PORTS))
-  (osc-send client "/sys/prefix" prefix))
+(defn get-client
+  [{:keys [id] :as device}]
+  (get @clients id))
 
-(defn send-to [{:keys [client] :as device} path & args]
-  (connect device)
-  (apply (partial osc-send client (str (:prefix device) path)) args))
+(defn send-to [{:keys [prefix] :as device} path & args]
+  (let [client (get-client device)]
+    (apply (partial osc-send client (str prefix path)) args)))
 
+(defn set-prefix
+  [device prefix]
+  (let [client (get-client device)]
+    (osc-send client "/sys/prefix" prefix)))
 
 ;; grid actions
 
@@ -131,46 +104,50 @@
     (bind-handlers out handlers)
     out))
 
-;; tests
+;; connection
 
-;; (monitor-devices)
-;; (def monome (first (vals (get-devices))))
+(defn connect
+  [{:keys [id port prefix] :as device}]
+  (let [client (osc-client host port)]
+    (swap! clients #(assoc % id client))
+    (swap! devices #(assoc % id device))
+    (osc-send client "/sys/port" (:server PORTS))
+    (set-prefix device prefix)
+    (connect-animation device)))
 
-;; (set-all monome 1)
-;; (set-all monome 0)
+(defn disconnect
+  [{:keys [id] :as device}]
+  (let [client (get-client device)]
+    (osc-close client)
+    (swap! clients #(dissoc % id))
+    (swap! devices #(dissoc % id))))
 
+(defn monitor-devices
+  []
+  (let [connection (chan)
+        handlers [[:add "/serialosc/device"]
+                  [:add "/serialosc/add"]
+                  [:remove "/serialosc/remove"]]
+        out (chan)]
+    (reset! devices {})
 
-;; (set-led monome 0 0 1)
-;; (set-led monome 0 0 0)
+    (add-watch devices :change (fn [key ref old new] (when-not (= old new)
+                                                      (put! out new))))
 
-;; (def row-on (apply vector (repeat 10 1)))
-;; (def row-off (apply vector (repeat 10 0)))
-;; (set-row monome 0 0 row-on)
-;; (set-row monome 0 0 row-off)
+    (rm-handlers handlers)
+    (bind-handlers connection handlers)
 
-;; (set-column monome 0 0 row-on)
-;; (set-column monome 0 0 row-off)
+    (osc-send to-serialosc "/serialosc/list" host (:server PORTS))
 
-;; (connect-animation monome)
-
-#_(defn handle-event
-  [[action args]]
-  (case action
-    :button (pprint args)
-    :tilt nil))
-
-#_(let [events (monome-listen monome)]
     (go
      (while true
-       (let [event (<! events)]
-         (handle-event event)))))
-
-;; monitor devices
-
-#_(let [available-devices (monitor-devices)]
-  (go
-   (while true
-     (let [devices (<! available-devices)
-           monome (first (vals devices))]
-
-       (toggle-all monome 0)))))
+       (let [[action [id type port]] (<! connection)
+             device {:id (keyword id)
+                     :type type
+                     :port port
+                     :prefix (str "/" id)}]
+         (case action
+           :add (connect device)
+           :remove (disconnect device))
+         (listen-disconnect))))
+    out))
