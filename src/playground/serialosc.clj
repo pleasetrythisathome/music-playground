@@ -1,12 +1,12 @@
 (ns playground.serialosc
   (:require [clojure.pprint :refer [pprint]]
-            [clojure.core.async :refer [go put! <! >! chan timeout]])
+            [clojure.core.async :refer [alt! go put! <! >! chan timeout]])
   (:use [overtone.osc]))
 
 ;(osc-debug true)
 
 (defonce PORTS {:serialosc 12002
-            :server 12001})
+                :server 12001})
 (defonce host "localhost")
 
 (defonce server (osc-server (:server PORTS)))
@@ -31,7 +31,7 @@
 
 (defn get-devices
   []
-  @devices)
+  (vals @devices))
 
 (defn get-client
   [{:keys [id] :as device}]
@@ -90,6 +90,23 @@
        (set-column monome col 0 row-off)
        (when (< col 18)
          (recur (inc col)))))))
+
+(defn make-cell [monome x y]
+  (let [stagger 200
+        length 2]
+    (go
+     (<! (timeout (rand-int stagger)))
+     (loop []
+       (set-led monome x y 1)
+       (<! (timeout (max 150 (rand-int stagger))))
+       (set-led monome x y 0)
+       (when-not (zero? (rand-int length))
+         (recur))))))
+
+(defn make-scene [monome rows cols]
+  (dotimes [x cols]
+    (dotimes [y rows]
+      (make-cell monome x y))))
 
 ;; add brightness operations
 
