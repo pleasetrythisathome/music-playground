@@ -14,36 +14,18 @@
 
 ;; init tests
 (comment
-  (log-c (:info monome))
-  (log-c (:info arc))
+  (log-m (:info monome))
+  (log-m (:info arc))
   (set-all monome 1)
   (set-all arc 0 15)
   (reset-device monome)
   (reset-device arc)
 
-  ;; (osc-listen server log-c :debug)
+  ;; (osc-listen server log-m :debug)
   ;; (osc-rm-listener server :debug)
-  (defn handle-event
-    [[action args]]
-    (case action
-      :press (log-c :press args)
-      :release (log-c :release args)
-      :delta (log-c :delta args)
-      :tilt nil))
 
-  (def all-events (listen-to monome))
-  ;; (close! all-events)
-  (go-loop []
-           (when-let [event (<! all-events)]
-             (handle-event event)
-             (recur)))
-
-  (def events (sub-device monome :press))
-  ;; (close! events)
-  (go-loop []
-           (when-let [event (<! events)]
-             (log-c event)
-             (recur))))
+  (def log-events (log-loop (sub-device monome :press))))
+  (close! log-events)
 
 ;; synths
 
@@ -53,32 +35,38 @@
      (sin-osc freq)
      vol))
 
-(definst saw-wave [freq 440 attack 0.01 sustain 0.4 release 0.1 vol 0.4] 
+(definst saw-wave [freq 440 attack 0.01 sustain 0.4 release 0.1 vol 0.4]
   (* (env-gen (lin attack sustain release) 1 1 0 1 FREE)
      (saw freq)
      vol))
 
-(definst square-wave [freq 440 attack 0.01 sustain 0.4 release 0.1 vol 0.4] 
+(definst square-wave [freq 440 attack 0.01 sustain 0.4 release 0.1 vol 0.4]
   (* (env-gen (lin attack sustain release) 1 1 0 1 FREE)
      (lf-pulse:ar freq)
      vol))
 
-(definst noisey [freq 440 attack 0.01 sustain 0.4 release 0.1 vol 0.4] 
+(definst noisey [freq 440 attack 0.01 sustain 0.4 release 0.1 vol 0.4]
   (* (env-gen (lin attack sustain release) 1 1 0 1 FREE)
      (pink-noise) ; also have (white-noise) and others...
      vol))
 
-(definst triangle-wave [freq 440 attack 0.01 sustain 0.1 release 0.4 vol 0.4] 
+(definst triangle-wave [freq 440 attack 0.01 sustain 0.1 release 0.4 vol 0.4]
   (* (env-gen (lin attack sustain release) 1 1 0 1 FREE)
      (lf-tri freq)
      vol))
 
-(definst spooky-house [freq 440 width 0.2 
-                         attack 0.3 sustain 4 release 0.3 
-                         vol 0.4] 
+(definst spooky-house [freq 440 width 0.2
+                         attack 0.3 sustain 4 release 0.3
+                         vol 0.4]
   (* (env-gen (lin attack sustain release) 1 1 0 1 FREE)
      (sin-osc (+ freq (* 20 (lf-pulse:kr 0.5 0 width))))
      vol))
+
+(sin-wave)
+(saw-wave)
+(square-wave)
+(noisey)
+(triangle-wave)
 
 ;; controls
 
@@ -102,50 +90,36 @@
   (reduce-kv (fn [out k v] (assoc out k (f k v))) {} coll))
 
 (defn bind-trigger [synth key & mappings]
-  (let [presses (filter< #(= key %) (map< (fn [[x y s]] [x y]) (sub-device monome :press)))]
+  (let [presses (filter< #(= key %) (sub-device monome :press))]
     (go-loop []
              (when-let [press (first (alts! [presses control]))]
-               (log-c press)
                (let [params (->> mappings
                                  (partition 2)
                                  (mapcat (fn [[k n]]
                                            [k (get-in @encoders [n :value])])))]
-                 (log-c params)
+                 (log-m params)
                  (apply synth params)
                  (recur))))
     control))
-
-(def trigger (bind-trigger sin-wave [0 0] :freq 0 :attack 1 :sustain 2 :release 3))
-;; (close! trigger)
-
-(apply sin-wave {:attack 0.043
-        :sustain 0.42
-        :release 0.03,
-                 :freq 574})
-
-(->> [:freq 0 :attack 1 :sustain 2 :release 3]
-     (partition 2)
-     (mapcat (fn [[k n]]
-               [k (get-in @encoders [n :value])])))
 
 ;; (reset-encoders!)
 ;; (add-watch encoders :mirror (partial on-change arc scaled-value))
 (add-watch encoders :mirror (partial on-change arc enc-dial))
 ;; (remove-watch encoders :mirror)
 
-(def delta (map< second (filter< #(= :delta (first %)) (listen-to arc))))
-;; (close! delta)
-(go-loop []
-         (when-let [[n d] (<! delta)]
-           (update-delta n d)
-           (recur)))
 
-(log-c @encoders)
+(def delta (update-on-delta arc))
+;; (close! delta)
+
+(log-m @encoders)
 
 ;; live
 
 (bind-encoders quux :freq0 )
 (release-encoders quux)
+
+(def trigger (bind-trigger sin-wave [0 0] :freq 0 :attack 1 :sustain 2 :release 3))
+;; (close! trigger)
 
 
 (set-encoder 0 {:value 440
