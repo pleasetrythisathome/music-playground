@@ -33,7 +33,7 @@
           index (-> beat
                     (- 1)
                     (mod (count (:notes this))))]
-      (f (get-in this [:notes index]))
+      (apply-at (nome beat) f (get-in this [:notes index]) [])
       (apply-by (nome (inc beat)) play-loop this nome f []))))
 
 (defn make-sequence
