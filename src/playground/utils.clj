@@ -20,6 +20,6 @@
 (defn log-loop [in]
   (go-loop []
            (when-let [e (<! in)]
-             (log-c e)
+             (log-m e)
              (recur)))
   in)
