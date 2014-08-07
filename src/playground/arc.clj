@@ -13,6 +13,9 @@
                                        :min 0
                                        :max 1000}))))
 
+(defn get-enc-value [n]
+  (get-in @encoders [n :value]))
+
 (defn update-encoder [n f]
   (swap! encoders (fn [all] (update-in all [n] f))))
 (defn set-encoder [n {:keys [step scale value] :as v}]
@@ -50,6 +53,15 @@
       (when-not (= old new)
         (f arc n new)))))
 
-(defn update-delta [n d]
-  (update-encoder n (fn [{:keys [step value min max] :as enc}]
-                      (assoc enc :value (constrain (+ value (* d step)) min max)))))
+(defn update-on-delta [arc]
+  (let [delta (map< second (filter< #(= :delta (first %)) (listen-to arc)))
+        control (chan)]
+    (go-loop []
+             (when-let [[n d] (first (alts! [delta control]))]
+               (update-encoder n (fn [{:keys [step value min max] :as enc}]
+                                   (assoc enc :value (-> d
+                                                         (* step)
+                                                         (+ value)
+                                                         (constrain min max)))))
+               (recur)))
+    control))
