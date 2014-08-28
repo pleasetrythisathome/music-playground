@@ -6,6 +6,27 @@
   (:use [overtone.live]
         [playground.utils]))
 
+(defn looper [speed f]
+  (go-loop [beat 0]
+           (f beat)
+           (<! (timeout speed))
+           (recur (inc beat))))
+
+(defn sub-metronome [& {:keys [bpm
+                               subdivisions
+                               beats]
+                        :or {bpm 120
+                             subdivisions 4
+                             beats 4}}]
+  (let [metro (metronome (* bpm subdivisions))
+        out (chan)]
+    (looper metro (fn [total]
+                    (let [in-measure (mod total (* subdivisions beats))
+                          beat (floor (/ in-measure beats))
+                          sub (mod (/ in-measure beats))]
+                      (put! out [beat sub]))))
+    out))
+
 (defrecord Note [pitch duration velocity])
 (defn make-note
   "creates an instance of a midi note"

@@ -75,29 +75,6 @@
      (pink-noise) ;; also have (white-noise) and others...
      vol))
 
-;; simple ECS
-
-(defrecord Instrument [inst])
-
-(def system (atom (e/create-system)))
-
-(defn add-inst [inst]
-  (let [synth (e/create-entity)]
-    (swap! system (fn [system]
-                    (-> system
-                        (e/add-entity synth)
-                        (e/add-component synth (->Instrument inst)))))))
-(add-inst sin-wave)
-(add-inst saw-wave)
-(add-inst square-wave)
-(add-inst triangle-wave)
-(add-inst noisey)
-
-(let [sys @system]
-  (doseq [entity (e/get-all-entities-with-component sys Instrument)]
-    (let [inst (e/get-component sys entity Instrument)]
-      (pprint (get-in inst [:inst :name])))))
-
 ;; controls
 
 (defn control [synth key v]
@@ -134,7 +111,7 @@
     control))
 
 (reset-encoders!)
-;; (add-watch encoders :mirror (partial on-change arc scaled-value))
+(add-watch encoders :mirror (partial on-change arc scaled-value))
 (add-watch encoders :mirror (partial on-change arc enc-dial))
 ;; (remove-watch encoders :mirror)
 
